@@ -16,7 +16,7 @@ credentials = {
 
 # Authentication
 authenticator = Authenticate(credentials, 'cookie_name', 'random_key', cookie_expiry_days=30)
-name, authentication_status, username = authenticator.login("Login", "main")
+name, authentication_status, username = authenticator.login("Login", "sidebar")
 
 if authentication_status:
     # Dashboard Title
