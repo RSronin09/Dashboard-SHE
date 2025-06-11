@@ -6,8 +6,9 @@ import os
 # ----------------------------------------
 # 📦 Relative Import (works on Streamlit Cloud)
 # ----------------------------------------
-from services.pdf_parser import parse_pdf
-from services.expense_classifier import classify_transactions
+from app.services.pdf_parser import parse_pdf
+from app.services.expense_classifier import classify_transactions
+
 
 # ----------------------------------------
 # 🎨 Streamlit UI Setup
