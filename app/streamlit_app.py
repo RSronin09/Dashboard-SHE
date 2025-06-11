@@ -1,37 +1,26 @@
+import streamlit as st
+import pandas as pd
 import sys
 import os
 
-# -------------------------------
-# 🔧 Add project root to sys.path
-# -------------------------------
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, CURRENT_DIR)
+# ----------------------------------------
+# 📦 Relative Import (works on Streamlit Cloud)
+# ----------------------------------------
+from services.pdf_parser import parse_pdf
+from services.expense_classifier import classify_transactions
 
-# -------------------------------
-# 📦 Standard Libraries
-# -------------------------------
-import streamlit as st
-import pandas as pd
-
-# -------------------------------
-# 🧩 Import from services
-# -------------------------------
-from app.services.pdf_parser import parse_pdf
-from app.services.expense_classifier import classify_transactions
-
-# -------------------------------
+# ----------------------------------------
 # 🎨 Streamlit UI Setup
-# -------------------------------
+# ----------------------------------------
 st.set_page_config(page_title="ML Expense Categorizer", layout="wide")
-
 st.title("💳 ML Expense Categorization App")
 st.markdown(
     "Upload a **bank or credit card PDF**, and this app will extract and categorize your expenses using machine learning."
 )
 
-# -------------------------------
+# ----------------------------------------
 # 📤 File Upload
-# -------------------------------
+# ----------------------------------------
 uploaded_file = st.file_uploader("📄 Upload your PDF statement", type=["pdf"])
 
 if uploaded_file:
