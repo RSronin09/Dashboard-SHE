@@ -1,19 +1,14 @@
 import streamlit as st
 import pandas as pd
-import sys
-import os
 
-# ----------------------------------------
-# 📦 Relative Import (works on Streamlit Cloud)
-# ----------------------------------------
-from app.services.pdf_parser import parse_pdf
-from app.services.expense_classifier import classify_transactions
-
+from services.pdf_parser import parse_pdf
+from services.expense_classifier import classify_transactions
 
 # ----------------------------------------
 # 🎨 Streamlit UI Setup
 # ----------------------------------------
 st.set_page_config(page_title="ML Expense Categorizer", layout="wide")
+
 st.title("💳 ML Expense Categorization App")
 st.markdown(
     "Upload a **bank or credit card PDF**, and this app will extract and categorize your expenses using machine learning."
