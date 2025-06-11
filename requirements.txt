@@ -1,12 +1,6 @@
-# Core dependencies
-streamlit==1.45.1
-pandas==2.3.0
-PyMuPDF==1.23.21  # Required for PDF parsing (fitz)
-scikit-learn==1.4.2
-
-# Optional: used by some versions of scikit-learn and pandas
-numpy==2.3.0
-python-dateutil==2.9.0.post0
-
-# Optional: for clean text processing in expense_classifier
-regex==2023.12.25
+streamlit
+pandas
+PyMuPDF
+scikit-learn
+numpy
+regex
