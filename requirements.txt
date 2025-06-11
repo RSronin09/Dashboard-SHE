@@ -1,5 +1,8 @@
 streamlit
 pandas
-requests
-plotly
-streamlit-authenticator
+joblib
+PyMuPDF
+scikit-learn==1.6.1
+xlrd
+openpyxl
+PyMuPDF
