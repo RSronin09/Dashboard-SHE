@@ -14,12 +14,32 @@ def parse_pdf_text(uploaded_file):
     return pdf_lines
 
 
+def classify_transaction(description, amount_str):
+    """Determine if the transaction is a Purchase, Credit, or Debt."""
+    try:
+        amount = float(amount_str)
+    except ValueError:
+        return "Unknown"
+
+    if amount < 0:
+        return "Credit"
+
+    debt_keywords = [
+        "fee", "interest", "advance", "charge", "penalty", "late", "finance"
+    ]
+    if any(keyword in description.lower() for keyword in debt_keywords):
+        return "Debt"
+
+    return "Purchase"
+
+
 def extract_transactions_from_text(lines):
     """
     Enhanced transaction parser:
     - Tracks cardholder changes
     - Handles multi-line descriptions
     - Extracts sale date, post date, description, amount
+    - Adds Transaction Type classification
     """
     transactions = []
     current_cardholder = None
@@ -48,7 +68,7 @@ def extract_transactions_from_text(lines):
             description_lines = []
             j = i + 2
 
-            # Collect all lines until we find one ending with a dollar amount
+            # Collect all lines until a line ends in a dollar amount
             while j < len(lines):
                 amount_match = re.search(r"\$[\d,]+\.\d{2}", lines[j])
                 if amount_match:
@@ -61,16 +81,18 @@ def extract_transactions_from_text(lines):
                 continue  # no amount found, skip
 
             description = " ".join(description_lines).strip()
+            txn_type = classify_transaction(description, amount_str)
 
             transactions.append({
                 "Sale Date": sale_date,
                 "Post Date": post_date,
                 "Description": description,
                 "Amount": amount_str,
-                "Cardholder": current_cardholder
+                "Cardholder": current_cardholder,
+                "Transaction Type": txn_type
             })
 
-            i = j + 1  # move pointer after amount line
+            i = j + 1
         else:
             i += 1
 
@@ -78,10 +100,7 @@ def extract_transactions_from_text(lines):
 
 
 def parse_pdf(uploaded_file):
-    """
-    Wrapper for full pipeline: parse text + extract transactions.
-    Used by codev1.py to simplify logic.
-    """
+    """Wrapper for full pipeline: parse text + extract transactions."""
     lines = parse_pdf_text(uploaded_file)
     df = extract_transactions_from_text(lines)
     return df
