@@ -1,5 +1,7 @@
 import fitz  # PyMuPDF
 import pandas as pd
+import re
+
 
 def parse_pdf_text(uploaded_file):
     """Extract all text lines from the uploaded PDF file using PyMuPDF."""
@@ -14,67 +16,67 @@ def parse_pdf_text(uploaded_file):
 
 def extract_transactions_from_text(lines):
     """
-    Extract both standard purchases (4-line blocks) and payments (3-line blocks) from raw PDF lines.
+    Enhanced transaction parser:
+    - Tracks cardholder changes
+    - Handles multi-line descriptions
+    - Extracts sale date, post date, description, amount
     """
     transactions = []
+    current_cardholder = None
     i = 0
 
-    while i < len(lines) - 2:
-        line_1 = lines[i].strip()
-        line_2 = lines[i + 1].strip()
-        line_3 = lines[i + 2].strip()
+    def is_date(s):
+        return bool(re.match(r"\d{2}/\d{2}", s.strip()))
 
-        # -------- Payment Transaction (3-line pattern) --------
-        if (
-            len(line_1) >= 4 and line_1[:2].isdigit() and
-            "PAYMENT" in line_2.upper() and
-            ("minus$" in line_3 or "-$" in line_3 or line_3.startswith("-"))
-        ):
-            amount = (
-                line_3.replace("minus$", "-")
-                      .replace("$", "")
-                      .replace(",", "")
-                      .strip()
-            )
-            transactions.append({
-                "Sale Date": line_1,
-                "Post Date": line_1,
-                "Description": line_2,
-                "Amount": amount
-            })
-            i += 3
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Track current cardholder
+        if "LAURO R SERRANO" in line:
+            current_cardholder = "Lauro R Serrano"
+            i += 1
+            continue
+        elif "CARLOS RIVERA" in line:
+            current_cardholder = "Carlos Rivera"
+            i += 1
             continue
 
-        # -------- Purchase Transaction (4-line pattern) --------
-        if i < len(lines) - 3:
-            line_4 = lines[i + 3].strip()
-            if (
-                len(line_1) >= 4 and line_1[:2].isdigit() and
-                len(line_2) >= 4 and line_2[:2].isdigit() and
-                "$" in line_4
-            ):
-                amount = (
-                    line_4.replace("$", "")
-                          .replace(",", "")
-                          .strip()
-                )
-                transactions.append({
-                    "Sale Date": line_1,
-                    "Post Date": line_2,
-                    "Description": line_3,
-                    "Amount": amount
-                })
-                i += 4
-                continue
+        # Try to parse a transaction block
+        if i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
+            sale_date = lines[i].strip()
+            post_date = lines[i + 1].strip()
+            description_lines = []
+            j = i + 2
 
-        i += 1
+            # Collect all lines until we find one ending with a dollar amount
+            while j < len(lines):
+                amount_match = re.search(r"\$[\d,]+\.\d{2}", lines[j])
+                if amount_match:
+                    amount_str = amount_match.group().replace("$", "").replace(",", "").strip()
+                    break
+                description_lines.append(lines[j].strip())
+                j += 1
+            else:
+                i += 1
+                continue  # no amount found, skip
+
+            description = " ".join(description_lines).strip()
+
+            transactions.append({
+                "Sale Date": sale_date,
+                "Post Date": post_date,
+                "Description": description,
+                "Amount": amount_str,
+                "Cardholder": current_cardholder
+            })
+
+            i = j + 1  # move pointer after amount line
+        else:
+            i += 1
 
     return pd.DataFrame(transactions)
 
 
-# -------------------------------
-# ✅ Wrapper Function (Option A)
-# -------------------------------
 def parse_pdf(uploaded_file):
     """
     Wrapper for full pipeline: parse text + extract transactions.
