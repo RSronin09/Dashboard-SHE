@@ -59,7 +59,6 @@ def extract_transactions_from_text(lines):
     while i < len(lines):
         line = lines[i].strip()
 
-        # Detect section headers
         if "Payments, Credits and Adjustments" in line:
             in_payments_section = True
             i += 1
@@ -75,7 +74,7 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Payments section: detect 3-line pattern
+        # Payments section: 3-line block
         if in_payments_section and i + 2 < len(lines):
             date_line = lines[i].strip()
             desc_line = lines[i + 1].strip()
@@ -99,7 +98,7 @@ def extract_transactions_from_text(lines):
                 i += 3
                 continue
 
-        # Multi-line purchases
+        # Multi-line purchase blocks
         if i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
             sale_date = lines[i].strip()
             post_date = lines[i + 1].strip()
@@ -140,4 +139,13 @@ def parse_pdf(uploaded_file):
     """Wrapper for full pipeline: parse text + extract transactions."""
     lines = parse_pdf_text(uploaded_file)
     df = extract_transactions_from_text(lines)
-    return df
+
+    # 🔍 Post-parsing debug: find mislabeled credits
+    df["Amount_float"] = df["Amount"].astype(float)
+    suspect_df = df[(df["Transaction Type"] == "Purchase") & (df["Amount_float"] < 0)]
+
+    if not suspect_df.empty:
+        print("\n[WARNING] Potentially mislabeled credits:")
+        print(suspect_df[["Sale Date", "Description", "Amount", "Transaction Type"]])
+
+    return df.drop(columns=["Amount_float"])
