@@ -20,6 +20,7 @@ def clean_amount(amount_str):
         cleaned = (
             amount_str.replace("(", "-")
                       .replace(")", "")
+                      .replace("minus$", "-")
                       .replace("$", "")
                       .replace(",", "")
                       .strip()
@@ -74,25 +75,28 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Payments or credits section - single-line
-        if in_payments_section:
-            print(f"[DEBUG] Checking line in payments section: {line}")
-            match = re.search(r"^(\d{2}/\d{2})\s+(.*?)\s+(-?\$[\d,]+\.\d{2})$", line)
-            if match:
-                sale_date = match.group(1).strip()
-                description = match.group(2).strip()
-                amount = match.group(3).strip()
+        # Payments section: detect 3-line pattern
+        if in_payments_section and i + 2 < len(lines):
+            date_line = lines[i].strip()
+            desc_line = lines[i + 1].strip()
+            amount_line = lines[i + 2].strip()
+
+            if is_date(date_line) and "payment" in desc_line.lower() and "minus$" in amount_line.lower():
+                sale_date = date_line
+                description = desc_line
+                amount = amount_line.lower().replace("minus$", "-").replace("$", "").replace(",", "").strip()
                 txn_type = classify_transaction(description, amount)
 
                 transactions.append({
                     "Sale Date": sale_date,
                     "Post Date": sale_date,
                     "Description": description,
-                    "Amount": amount.replace("$", "").replace(",", "").strip(),
+                    "Amount": amount,
                     "Cardholder": current_cardholder,
                     "Transaction Type": txn_type
                 })
-                i += 1
+
+                i += 3
                 continue
 
         # Multi-line purchases
