@@ -97,29 +97,30 @@ def extract_transactions_from_text(lines):
                 i += 3
                 continue
 
-        # 2️⃣ AMAZON CREDIT (1-line block with 2 dates)
+        # 2️⃣ REFUND CREDIT (1-line with 2 dates)
         if in_payments_section:
-            match = re.match(r"^(\d{2}/\d{2})\s+(\d{2}/\d{2})\s+(.+?)\s+(-?\$[\d,]+\.\d{2})$", line)
-            if match:
-                sale_date = match.group(1)
-                post_date = match.group(2)
-                description = match.group(3).strip()
-                amount_str = match.group(4).strip()
+            print(f"[DEBUG] Checking line for refund credit: {line}")
+            parts = re.split(r"\s{2,}|\t", line)  # split on 2+ spaces or tabs
+            if len(parts) >= 4 and is_date(parts[0]) and is_date(parts[1]) and re.search(r"-?\$[\d,]+\.\d{2}", parts[-1]):
+                sale_date = parts[0]
+                post_date = parts[1]
+                amount_str = parts[-1]
+                description = " ".join(parts[2:-1])
 
                 transactions.append({
                     "Sale Date": sale_date,
                     "Post Date": post_date,
-                    "Description": description,
+                    "Description": description.strip(),
                     "Amount": amount_str.replace("$", "").replace(",", "").replace("minus$", "-"),
                     "Cardholder": "General Account",
                     "Transaction Type": "Credit"
                 })
 
-                print(f"[DEBUG] Refund credit parsed: {sale_date} | {description} | {amount_str}")
+                print(f"[DEBUG] ✅ Refund credit parsed: {sale_date} | {description.strip()} | {amount_str}")
                 i += 1
                 continue
 
-        # 3️⃣ STANDARD PURCHASE (4-line block) — only if not in payments section
+        # 3️⃣ PURCHASE (4-line block, only outside payments section)
         if not in_payments_section and i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
             sale_date = lines[i].strip()
             post_date = lines[i + 1].strip()
