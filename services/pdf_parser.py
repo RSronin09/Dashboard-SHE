@@ -51,14 +51,15 @@ def extract_transactions_from_text(lines):
     i = 0
 
     def is_date(s):
-        return bool(re.match(r"\d{2}/\d{2}", s))
+        return bool(re.match(r"\d{2}/\d{2}", s.strip()))
 
     while i < len(lines):
         line = lines[i].strip()
 
-        # Section markers
+        # Section headers
         if "Payments, Credits and Adjustments" in line:
             in_payments_section = True
+            current_cardholder = "General Account"
             i += 1
             continue
         elif "LAURO R SERRANO" in line:
@@ -72,9 +73,32 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Fix: refund/credit lines in Payments section
+        # 1️⃣ ONLINE PAYMENT (3-line block)
+        if in_payments_section and i + 2 < len(lines):
+            date_line = lines[i].strip()
+            desc_line = lines[i + 1].strip()
+            amount_line = lines[i + 2].strip()
+
+            if is_date(date_line) and "payment" in desc_line.lower() and "minus$" in amount_line.lower():
+                sale_date = date_line
+                description = desc_line
+                amount = amount_line.lower().replace("minus$", "-").replace("$", "").replace(",", "").strip()
+
+                transactions.append({
+                    "Sale Date": sale_date,
+                    "Post Date": sale_date,
+                    "Description": description,
+                    "Amount": amount,
+                    "Cardholder": "General Account",
+                    "Transaction Type": "Credit"
+                })
+
+                print(f"[DEBUG] Online payment parsed: {sale_date} | {description} | {amount}")
+                i += 3
+                continue
+
+        # 2️⃣ AMAZON CREDIT (1-line block with 2 dates)
         if in_payments_section:
-            # Match: MM/DD MM/DD ... -$xx.xx
             match = re.match(r"^(\d{2}/\d{2})\s+(\d{2}/\d{2})\s+(.+?)\s+(-?\$[\d,]+\.\d{2})$", line)
             if match:
                 sale_date = match.group(1)
@@ -91,11 +115,11 @@ def extract_transactions_from_text(lines):
                     "Transaction Type": "Credit"
                 })
 
-                print(f"[DEBUG] Parsed refund credit: {sale_date} | {description} | {amount_str}")
+                print(f"[DEBUG] Refund credit parsed: {sale_date} | {description} | {amount_str}")
                 i += 1
                 continue
 
-        # Skip purchase parsing during payments section
+        # 3️⃣ STANDARD PURCHASE (4-line block) — only if not in payments section
         if not in_payments_section and i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
             sale_date = lines[i].strip()
             post_date = lines[i + 1].strip()
