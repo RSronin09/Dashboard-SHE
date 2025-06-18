@@ -62,7 +62,6 @@ def extract_transactions_from_text(lines):
     while i < len(lines):
         line = lines[i].strip()
 
-        # Detect section headers
         if "Payments, Credits and Adjustments" in line:
             in_payments_section = True
             i += 1
@@ -78,19 +77,16 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Payments/Credits section: handle 3-line blocks
+        # Payments section - 3-line block (Online Payment)
         if in_payments_section and i + 2 < len(lines):
             date_line = lines[i].strip()
             desc_line = lines[i + 1].strip()
             amount_line = lines[i + 2].strip()
 
-            if is_date(date_line) and "minus$" in amount_line.lower():
+            if is_date(date_line) and "payment" in desc_line.lower() and "minus$" in amount_line.lower():
                 sale_date = date_line
                 description = desc_line
                 amount = amount_line.lower().replace("minus$", "-").replace("$", "").replace(",", "").strip()
-
-                # Force all minus$ transactions here to be Credits
-                txn_type = classify_transaction(description, amount, override_type="Credit")
 
                 transactions.append({
                     "Sale Date": sale_date,
@@ -98,11 +94,31 @@ def extract_transactions_from_text(lines):
                     "Description": description,
                     "Amount": amount,
                     "Cardholder": "General Account",
-                    "Transaction Type": txn_type
+                    "Transaction Type": "Credit"
                 })
 
-                print(f"[DEBUG] Parsed credit: {sale_date} | {description} | {amount}")
                 i += 3
+                continue
+
+        # Payments section - 1-line or 2-date refund with -$amount
+        if in_payments_section and re.search(r"\d{2}/\d{2}\s+\d{2}/\d{2}.*-\$\d", line):
+            parts = line.split()
+            if len(parts) >= 5:
+                sale_date, post_date = parts[0], parts[1]
+                amount_str = parts[-1].replace("$", "").replace(",", "").replace("(", "-").replace(")", "")
+                description = " ".join(parts[2:-1])
+
+                transactions.append({
+                    "Sale Date": sale_date,
+                    "Post Date": post_date,
+                    "Description": description,
+                    "Amount": amount_str.strip().replace("$", "").replace(",", ""),
+                    "Cardholder": "General Account",
+                    "Transaction Type": "Credit"
+                })
+
+                print(f"[DEBUG] Parsed credit: {sale_date} | {description} | {amount_str}")
+                i += 1
                 continue
 
         # Multi-line purchase blocks
@@ -147,7 +163,6 @@ def parse_pdf(uploaded_file):
     lines = parse_pdf_text(uploaded_file)
     df = extract_transactions_from_text(lines)
 
-    # Optional: debug check
     df["Amount_float"] = df["Amount"].astype(float)
     suspect_df = df[(df["Transaction Type"] == "Purchase") & (df["Amount_float"] < 0)]
 
