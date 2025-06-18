@@ -14,12 +14,25 @@ def parse_pdf_text(uploaded_file):
     return pdf_lines
 
 
+def clean_amount(amount_str):
+    """Robustly clean and convert string to float."""
+    try:
+        cleaned = (
+            amount_str.replace("(", "-")
+                      .replace(")", "")
+                      .replace("$", "")
+                      .replace(",", "")
+                      .strip()
+        )
+        return float(cleaned)
+    except Exception as e:
+        print(f"[ERROR] Amount parsing failed for: '{amount_str}' -> {e}")
+        return 0.0
+
+
 def classify_transaction(description, amount_str):
     """Determine if the transaction is a Purchase, Credit, or Debt."""
-    try:
-        amount = float(amount_str)
-    except ValueError:
-        return "Unknown"
+    amount = clean_amount(amount_str)
 
     if amount < 0:
         return "Credit"
@@ -34,12 +47,6 @@ def classify_transaction(description, amount_str):
 
 
 def extract_transactions_from_text(lines):
-    """
-    Enhanced transaction parser:
-    - Handles multi-line purchases
-    - Parses single-line payments/credits
-    - Adds cardholder and transaction type
-    """
     transactions = []
     current_cardholder = "General Account"
     i = 0
@@ -67,44 +74,44 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Handle single-line transactions (payments, credits, refunds)
+        # Payments or credits section - single-line
         if in_payments_section:
-            match = re.search(r"^(\d{2}/\d{2})\s+(.*?)(-?\$[\d,]+\.\d{2})$", line)
+            print(f"[DEBUG] Checking line in payments section: {line}")
+            match = re.search(r"^(\d{2}/\d{2})\s+(.*?)\s+(-?\$[\d,]+\.\d{2})$", line)
             if match:
                 sale_date = match.group(1).strip()
                 description = match.group(2).strip()
-                amount = match.group(3).replace("$", "").replace(",", "").strip()
+                amount = match.group(3).strip()
                 txn_type = classify_transaction(description, amount)
 
                 transactions.append({
                     "Sale Date": sale_date,
                     "Post Date": sale_date,
                     "Description": description,
-                    "Amount": amount,
+                    "Amount": amount.replace("$", "").replace(",", "").strip(),
                     "Cardholder": current_cardholder,
                     "Transaction Type": txn_type
                 })
                 i += 1
                 continue
 
-        # Handle multi-line purchase blocks
+        # Multi-line purchases
         if i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
             sale_date = lines[i].strip()
             post_date = lines[i + 1].strip()
             description_lines = []
             j = i + 2
 
-            # Collect description until we find an amount
             while j < len(lines):
                 amount_match = re.search(r"\$[\d,]+\.\d{2}", lines[j])
                 if amount_match:
-                    amount_str = amount_match.group().replace("$", "").replace(",", "").strip()
+                    amount_str = amount_match.group().strip()
                     break
                 description_lines.append(lines[j].strip())
                 j += 1
             else:
                 i += 1
-                continue  # no amount found
+                continue
 
             description = " ".join(description_lines).strip()
             txn_type = classify_transaction(description, amount_str)
@@ -113,7 +120,7 @@ def extract_transactions_from_text(lines):
                 "Sale Date": sale_date,
                 "Post Date": post_date,
                 "Description": description,
-                "Amount": amount_str,
+                "Amount": amount_str.replace("$", "").replace(",", "").strip(),
                 "Cardholder": current_cardholder,
                 "Transaction Type": txn_type
             })
