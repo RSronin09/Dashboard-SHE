@@ -36,9 +36,9 @@ def classify_transaction(description, amount_str):
 def extract_transactions_from_text(lines):
     """
     Enhanced transaction parser:
-    - Handles multi-line descriptions
-    - Detects Payments section before cardholders
-    - Adds transaction type + cardholder tagging
+    - Handles multi-line purchases
+    - Parses single-line payments/credits
+    - Adds cardholder and transaction type
     """
     transactions = []
     current_cardholder = "General Account"
@@ -67,11 +67,11 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Handle single-line payment/credit (in payments section)
+        # Handle single-line transactions (payments, credits, refunds)
         if in_payments_section:
-            match = re.match(r"^(\d{2}/\d{2})\s+(.*?)\s+(-?\$[\d,]+\.\d{2})$", line)
+            match = re.search(r"^(\d{2}/\d{2})\s+(.*?)(-?\$[\d,]+\.\d{2})$", line)
             if match:
-                sale_date = match.group(1)
+                sale_date = match.group(1).strip()
                 description = match.group(2).strip()
                 amount = match.group(3).replace("$", "").replace(",", "").strip()
                 txn_type = classify_transaction(description, amount)
@@ -87,7 +87,7 @@ def extract_transactions_from_text(lines):
                 i += 1
                 continue
 
-        # Handle multi-line standard purchase
+        # Handle multi-line purchase blocks
         if i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
             sale_date = lines[i].strip()
             post_date = lines[i + 1].strip()
