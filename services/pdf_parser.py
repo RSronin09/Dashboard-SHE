@@ -36,14 +36,14 @@ def classify_transaction(description, amount_str):
 def extract_transactions_from_text(lines):
     """
     Enhanced transaction parser:
-    - Tracks cardholder changes
     - Handles multi-line descriptions
-    - Extracts sale date, post date, description, amount
-    - Adds Transaction Type classification
+    - Detects Payments section before cardholders
+    - Adds transaction type + cardholder tagging
     """
     transactions = []
-    current_cardholder = None
+    current_cardholder = "General Account"
     i = 0
+    in_payments_section = False
 
     def is_date(s):
         return bool(re.match(r"\d{2}/\d{2}", s.strip()))
@@ -51,24 +51,50 @@ def extract_transactions_from_text(lines):
     while i < len(lines):
         line = lines[i].strip()
 
-        # Track current cardholder
-        if "LAURO R SERRANO" in line:
+        # Detect section headers
+        if "Payments, Credits and Adjustments" in line:
+            in_payments_section = True
+            i += 1
+            continue
+        elif "LAURO R SERRANO" in line:
             current_cardholder = "Lauro R Serrano"
+            in_payments_section = False
             i += 1
             continue
         elif "CARLOS RIVERA" in line:
             current_cardholder = "Carlos Rivera"
+            in_payments_section = False
             i += 1
             continue
 
-        # Try to parse a transaction block
+        # Handle single-line payment/credit (in payments section)
+        if in_payments_section:
+            match = re.match(r"^(\d{2}/\d{2})\s+(.*?)\s+(-?\$[\d,]+\.\d{2})$", line)
+            if match:
+                sale_date = match.group(1)
+                description = match.group(2).strip()
+                amount = match.group(3).replace("$", "").replace(",", "").strip()
+                txn_type = classify_transaction(description, amount)
+
+                transactions.append({
+                    "Sale Date": sale_date,
+                    "Post Date": sale_date,
+                    "Description": description,
+                    "Amount": amount,
+                    "Cardholder": current_cardholder,
+                    "Transaction Type": txn_type
+                })
+                i += 1
+                continue
+
+        # Handle multi-line standard purchase
         if i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
             sale_date = lines[i].strip()
             post_date = lines[i + 1].strip()
             description_lines = []
             j = i + 2
 
-            # Collect all lines until a line ends in a dollar amount
+            # Collect description until we find an amount
             while j < len(lines):
                 amount_match = re.search(r"\$[\d,]+\.\d{2}", lines[j])
                 if amount_match:
@@ -78,7 +104,7 @@ def extract_transactions_from_text(lines):
                 j += 1
             else:
                 i += 1
-                continue  # no amount found, skip
+                continue  # no amount found
 
             description = " ".join(description_lines).strip()
             txn_type = classify_transaction(description, amount_str)
