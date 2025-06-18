@@ -4,7 +4,6 @@ import re
 
 
 def parse_pdf_text(uploaded_file):
-    """Extract all text lines from the uploaded PDF file using PyMuPDF."""
     pdf_lines = []
     with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
         for page in doc:
@@ -15,36 +14,31 @@ def parse_pdf_text(uploaded_file):
 
 
 def clean_amount(amount_str):
-    """Robustly clean and convert string to float."""
     try:
         cleaned = (
-            amount_str.replace("(", "-")
+            amount_str.replace("minus$", "-")
+                      .replace("(", "-")
                       .replace(")", "")
-                      .replace("minus$", "-")
                       .replace("$", "")
                       .replace(",", "")
                       .strip()
         )
         return float(cleaned)
     except Exception as e:
-        print(f"[ERROR] Amount parsing failed for: '{amount_str}' -> {e}")
+        print(f"[ERROR] Failed to parse amount '{amount_str}': {e}")
         return 0.0
 
 
-def classify_transaction(description, amount_str, override_type=None):
-    """Determine if the transaction is a Purchase, Credit, or Debt."""
-    if override_type:
-        return override_type
+def classify_transaction(description, amount_str, override=None):
+    if override:
+        return override
 
     amount = clean_amount(amount_str)
 
     if amount < 0:
         return "Credit"
 
-    debt_keywords = [
-        "fee", "interest", "advance", "charge", "penalty", "late", "finance"
-    ]
-    if any(keyword in description.lower() for keyword in debt_keywords):
+    if any(k in description.lower() for k in ["fee", "interest", "advance", "charge", "penalty", "late", "finance"]):
         return "Debt"
 
     return "Purchase"
@@ -53,15 +47,16 @@ def classify_transaction(description, amount_str, override_type=None):
 def extract_transactions_from_text(lines):
     transactions = []
     current_cardholder = "General Account"
-    i = 0
     in_payments_section = False
+    i = 0
 
     def is_date(s):
-        return bool(re.match(r"\d{2}/\d{2}", s.strip()))
+        return bool(re.match(r"\d{2}/\d{2}", s))
 
     while i < len(lines):
         line = lines[i].strip()
 
+        # Section markers
         if "Payments, Credits and Adjustments" in line:
             in_payments_section = True
             i += 1
@@ -77,52 +72,31 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Payments section - 3-line block (Online Payment)
-        if in_payments_section and i + 2 < len(lines):
-            date_line = lines[i].strip()
-            desc_line = lines[i + 1].strip()
-            amount_line = lines[i + 2].strip()
-
-            if is_date(date_line) and "payment" in desc_line.lower() and "minus$" in amount_line.lower():
-                sale_date = date_line
-                description = desc_line
-                amount = amount_line.lower().replace("minus$", "-").replace("$", "").replace(",", "").strip()
-
-                transactions.append({
-                    "Sale Date": sale_date,
-                    "Post Date": sale_date,
-                    "Description": description,
-                    "Amount": amount,
-                    "Cardholder": "General Account",
-                    "Transaction Type": "Credit"
-                })
-
-                i += 3
-                continue
-
-        # Payments section - 1-line or 2-date refund with -$amount
-        if in_payments_section and re.search(r"\d{2}/\d{2}\s+\d{2}/\d{2}.*-\$\d", line):
-            parts = line.split()
-            if len(parts) >= 5:
-                sale_date, post_date = parts[0], parts[1]
-                amount_str = parts[-1].replace("$", "").replace(",", "").replace("(", "-").replace(")", "")
-                description = " ".join(parts[2:-1])
+        # Fix: refund/credit lines in Payments section
+        if in_payments_section:
+            # Match: MM/DD MM/DD ... -$xx.xx
+            match = re.match(r"^(\d{2}/\d{2})\s+(\d{2}/\d{2})\s+(.+?)\s+(-?\$[\d,]+\.\d{2})$", line)
+            if match:
+                sale_date = match.group(1)
+                post_date = match.group(2)
+                description = match.group(3).strip()
+                amount_str = match.group(4).strip()
 
                 transactions.append({
                     "Sale Date": sale_date,
                     "Post Date": post_date,
                     "Description": description,
-                    "Amount": amount_str.strip().replace("$", "").replace(",", ""),
+                    "Amount": amount_str.replace("$", "").replace(",", "").replace("minus$", "-"),
                     "Cardholder": "General Account",
                     "Transaction Type": "Credit"
                 })
 
-                print(f"[DEBUG] Parsed credit: {sale_date} | {description} | {amount_str}")
+                print(f"[DEBUG] Parsed refund credit: {sale_date} | {description} | {amount_str}")
                 i += 1
                 continue
 
-        # Multi-line purchase blocks
-        if i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
+        # Skip purchase parsing during payments section
+        if not in_payments_section and i + 3 < len(lines) and is_date(lines[i]) and is_date(lines[i + 1]):
             sale_date = lines[i].strip()
             post_date = lines[i + 1].strip()
             description_lines = []
@@ -131,7 +105,7 @@ def extract_transactions_from_text(lines):
             while j < len(lines):
                 amount_match = re.search(r"\$[\d,]+\.\d{2}", lines[j])
                 if amount_match:
-                    amount_str = amount_match.group().strip()
+                    amount_str = amount_match.group()
                     break
                 description_lines.append(lines[j].strip())
                 j += 1
@@ -146,20 +120,20 @@ def extract_transactions_from_text(lines):
                 "Sale Date": sale_date,
                 "Post Date": post_date,
                 "Description": description,
-                "Amount": amount_str.replace("$", "").replace(",", "").strip(),
+                "Amount": amount_str.replace("$", "").replace(",", ""),
                 "Cardholder": current_cardholder,
                 "Transaction Type": txn_type
             })
 
             i = j + 1
-        else:
-            i += 1
+            continue
+
+        i += 1
 
     return pd.DataFrame(transactions)
 
 
 def parse_pdf(uploaded_file):
-    """Wrapper for full pipeline: parse text + extract transactions."""
     lines = parse_pdf_text(uploaded_file)
     df = extract_transactions_from_text(lines)
 
