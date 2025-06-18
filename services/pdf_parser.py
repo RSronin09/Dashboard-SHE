@@ -31,8 +31,11 @@ def clean_amount(amount_str):
         return 0.0
 
 
-def classify_transaction(description, amount_str):
+def classify_transaction(description, amount_str, override_type=None):
     """Determine if the transaction is a Purchase, Credit, or Debt."""
+    if override_type:
+        return override_type
+
     amount = clean_amount(amount_str)
 
     if amount < 0:
@@ -59,6 +62,7 @@ def extract_transactions_from_text(lines):
     while i < len(lines):
         line = lines[i].strip()
 
+        # Detect section headers
         if "Payments, Credits and Adjustments" in line:
             in_payments_section = True
             i += 1
@@ -74,27 +78,30 @@ def extract_transactions_from_text(lines):
             i += 1
             continue
 
-        # Payments section: 3-line block
+        # Payments/Credits section: handle 3-line blocks
         if in_payments_section and i + 2 < len(lines):
             date_line = lines[i].strip()
             desc_line = lines[i + 1].strip()
             amount_line = lines[i + 2].strip()
 
-            if is_date(date_line) and "payment" in desc_line.lower() and "minus$" in amount_line.lower():
+            if is_date(date_line) and "minus$" in amount_line.lower():
                 sale_date = date_line
                 description = desc_line
                 amount = amount_line.lower().replace("minus$", "-").replace("$", "").replace(",", "").strip()
-                txn_type = classify_transaction(description, amount)
+
+                # Force all minus$ transactions here to be Credits
+                txn_type = classify_transaction(description, amount, override_type="Credit")
 
                 transactions.append({
                     "Sale Date": sale_date,
                     "Post Date": sale_date,
                     "Description": description,
                     "Amount": amount,
-                    "Cardholder": current_cardholder,
+                    "Cardholder": "General Account",
                     "Transaction Type": txn_type
                 })
 
+                print(f"[DEBUG] Parsed credit: {sale_date} | {description} | {amount}")
                 i += 3
                 continue
 
@@ -140,12 +147,12 @@ def parse_pdf(uploaded_file):
     lines = parse_pdf_text(uploaded_file)
     df = extract_transactions_from_text(lines)
 
-    # 🔍 Post-parsing debug: find mislabeled credits
+    # Optional: debug check
     df["Amount_float"] = df["Amount"].astype(float)
     suspect_df = df[(df["Transaction Type"] == "Purchase") & (df["Amount_float"] < 0)]
 
     if not suspect_df.empty:
-        print("\n[WARNING] Potentially mislabeled credits:")
+        print("\n[WARNING] Possible mislabeled purchases that are negative:")
         print(suspect_df[["Sale Date", "Description", "Amount", "Transaction Type"]])
 
     return df.drop(columns=["Amount_float"])
