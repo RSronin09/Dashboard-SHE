@@ -67,16 +67,20 @@ if uploaded_file:
                     if pie_data.empty:
                         st.warning("⚠️ No positive expenses to chart.")
                     else:
-                        # Display table
-                        st.dataframe(pie_data, use_container_width=True)
+                        # Display formatted table with dollar signs and commas
+                        formatted_data = pie_data.copy()
+                        formatted_data["Total"] = formatted_data["Total"].map("${:,.2f}".format)
+                        st.dataframe(formatted_data, use_container_width=True)
 
-                        # Plot pie chart
-                        fig, ax = plt.subplots()
+                        # Plot improved pie chart
+                        fig, ax = plt.subplots(figsize=(7, 7))
                         ax.pie(
                             pie_data["Total"],
                             labels=pie_data["Predicted_GL"],
                             autopct="%1.1f%%",
-                            startangle=90
+                            startangle=90,
+                            labeldistance=1.05,
+                            pctdistance=0.75
                         )
                         ax.axis("equal")
                         st.pyplot(fig)
