@@ -13,7 +13,7 @@ st.set_page_config(page_title="ML Expense Categorizer", layout="wide")
 st.title("💳 ML Expense Categorization App")
 st.markdown(
     "Upload a **bank or credit card PDF**, and this app will extract and categorize your expenses using machine learning. "
-    "You can review and edit the categories before downloading your data."
+    "You can review and edit the categories, explore the insights visually, and download the results."
 )
 
 # ----------------------------------------
@@ -52,10 +52,7 @@ if uploaded_file:
                 st.subheader("📊 Expense Breakdown by GL Category")
 
                 try:
-                    # Convert Amount column to float
                     edited_df["Amount_float"] = edited_df["Amount"].astype(float)
-
-                    # Only include positive amounts for the pie chart
                     positive_df = edited_df[edited_df["Amount_float"] > 0]
 
                     pie_data = (
@@ -67,12 +64,10 @@ if uploaded_file:
                     if pie_data.empty:
                         st.warning("⚠️ No positive expenses to chart.")
                     else:
-                        # Display formatted table with dollar signs and commas
                         formatted_data = pie_data.copy()
                         formatted_data["Total"] = formatted_data["Total"].map("${:,.2f}".format)
                         st.dataframe(formatted_data, use_container_width=True)
 
-                        # Plot improved pie chart
                         fig, ax = plt.subplots(figsize=(7, 7))
                         ax.pie(
                             pie_data["Total"],
