@@ -14,17 +14,24 @@ except FileNotFoundError:
 def classify_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
     """
     Classifies each transaction's GL Category using the trained model.
-    Expects a DataFrame with at least a 'Description' column.
-    Returns the original DataFrame with an added 'Predicted_GL' column.
+    Applies override rules for specific known misclassifications.
     """
     if "Description" not in transactions_df.columns:
         raise ValueError("❌ 'Description' column is required in the input DataFrame.")
 
-    # Make predictions using the trained pipeline
-    try:
-        predicted_gl = model.predict(transactions_df["Description"])
-        transactions_df["Predicted_GL"] = predicted_gl
-    except Exception as e:
-        raise RuntimeError(f"❌ Error during classification: {e}")
+    predictions = []
+    for desc in transactions_df["Description"]:
+        desc_lower = str(desc).lower().strip()
 
+        # ✅ Override rule for PAPERSMITH
+        if "papersmith" in desc_lower:
+            predictions.append("Dues & Subscriptions")
+        else:
+            try:
+                prediction = model.predict([desc])[0]
+                predictions.append(prediction)
+            except Exception as e:
+                predictions.append("Unknown")  # fallback if model fails on this row
+
+    transactions_df["Predicted_GL"] = predictions
     return transactions_df
