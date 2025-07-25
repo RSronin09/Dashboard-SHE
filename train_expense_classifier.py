@@ -3,8 +3,6 @@ import pandas as pd
 import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
@@ -36,23 +34,31 @@ for sheet in xl.sheet_names:
         print(f"❌ Failed to parse {sheet}: {e}")
 
 # -------------------------
-# Combine and Split
+# Combine and Prepare
 # -------------------------
 if not all_data:
     raise ValueError("No valid sheets found for training.")
 
 df_all = pd.concat(all_data, ignore_index=True)
-X = df_all[['Description']]
+
+# Clean labels and descriptions
+df_all['Quick Books GL'] = df_all['Quick Books GL'].astype(str).str.strip()
+df_all['Description'] = df_all['Description'].astype(str).str.strip()
+
+X = df_all['Description']
 y = df_all['Quick Books GL']
 
-X_train, X_test, y_train, y_test = train_test_split(X['Description'], y, test_size=0.2, random_state=42)
+# -------------------------
+# Train/Test Split
+# -------------------------
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # -------------------------
-# Build Pipeline
+# Build & Train Pipeline
 # -------------------------
 pipeline = Pipeline([
-    ('vectorizer', TfidfVectorizer()),
-    ('classifier', LogisticRegression(max_iter=1000))
+    ('vectorizer', TfidfVectorizer(ngram_range=(1, 2), stop_words="english")),
+    ('classifier', LogisticRegression(max_iter=1000, class_weight="balanced"))
 ])
 
 pipeline.fit(X_train, y_train)
