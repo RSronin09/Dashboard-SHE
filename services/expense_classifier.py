@@ -23,8 +23,10 @@ def classify_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
     for desc in transactions_df["Description"]:
         desc_lower = str(desc).lower().strip()
 
-        # ✅ Override rule for PAPERSMITH
+        # ✅ Override rules
         if "papersmith" in desc_lower:
+            predictions.append("Dues & Subscriptions")
+        elif "propstream" in desc_lower:
             predictions.append("Dues & Subscriptions")
         else:
             try:
